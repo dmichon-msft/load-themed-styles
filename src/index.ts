@@ -15,6 +15,8 @@ export interface IThemingInstruction {
 
 export type ThemableArray = Array<IThemingInstruction>;
 
+export type ThemableInput = Array<IThemingInstruction | string>;
+
 export interface ITheme {
   [key: string]: string;
 }
@@ -66,9 +68,9 @@ const MAX_STYLE_CONTENT_SIZE: number = 10000;
 /**
  * Loads a set of style text. If it is registered too early, we will register it when the window.load
  * event is fired.
- * @param {string | ThemableArray} styles Themable style text to register.
+ * @param {ThemableInput} styles Themable style text to register.
  */
-export function loadStyles(styles: string | ThemableArray): void {
+export function loadStyles(styles: string | ThemableInput): void {
   const styleParts: ThemableArray = Array.isArray(styles) ? styles : splitStyles(styles);
 
   if (_injectStylesWithCssText === undefined) {
@@ -89,10 +91,10 @@ export function configureLoadStyles(callback: (styles: string) => void): void {
 /**
  * Loads a set of style text. If it is registered too early, we will register it when the window.load event
  * is fired.
- * @param {string} styleText Style to register.
+ * @param {ThemableInput} stylesArray Style to register.
  * @param {IStyleRecord} styleRecord Existing style record to re-apply.
  */
-function applyThemableStyles(stylesArray: ThemableArray, styleRecord?: IStyleRecord): void {
+function applyThemableStyles(stylesArray: ThemableInput, styleRecord?: IStyleRecord): void {
   if (_themeState.loadStyles) {
     const styles: string = resolveThemableArray(stylesArray);
     _themeState.loadStyles(styles);
@@ -140,33 +142,37 @@ export function detokenize(styles: string): string {
 
 /**
  * Resolves ThemingInstruction objects in an array and joins the result into a string.
- * @param {ThemableArray} splitStyleArray ThemableArray to resolve and join.
+ * @param {ThemableInput} splitStyleArray ThemableInput to resolve and join.
  */
-function resolveThemableArray(splitStyleArray: ThemableArray): string {
+function resolveThemableArray(splitStyleArray: ThemableInput): string {
   const { theme }: IThemeState = _themeState;
   let resolvedCss: string;
   if (splitStyleArray) {
     // Resolve the array of theming instructions to an array of strings.
     // Then join the array to produce the final CSS string.
-    const resolvedArray: string[] = splitStyleArray.map((currentValue: IThemingInstruction) => {
-      const themeSlot: string = currentValue.theme;
-      if (themeSlot) {
-        // A theming annotation. Resolve it.
-        const themedValue: string = theme ? theme[themeSlot] : undefined;
-        const defaultValue: string = currentValue.defaultValue;
-
-        // Warn to console if we hit an unthemed value even when themes are provided.
-        // Allow the themedValue to be undefined to explicitly request the default value.
-        if (theme && !themedValue && console && !(themeSlot in theme)) {
-          /* tslint:disable: max-line-length */
-          console.warn(`Theming value not provided for "${themeSlot}". Falling back to "${defaultValue || 'inherit'}".`);
-          /* tslint:enable: max-line-length */
-        }
-
-        return themedValue || defaultValue || 'inherit';
+    const resolvedArray: string[] = splitStyleArray.map((currentValue: string | IThemingInstruction) => {
+      if (typeof currentValue === 'string') {
+        return currentValue;
       } else {
-        // A non-themable string. Preserve it.
-        return currentValue.rawString;
+        const themeSlot: string = currentValue.theme;
+        if (themeSlot) {
+          // A theming annotation. Resolve it.
+          const themedValue: string = theme ? theme[themeSlot] : undefined;
+          const defaultValue: string = currentValue.defaultValue;
+
+          // Warn to console if we hit an unthemed value even when themes are provided.
+          // Allow the themedValue to be undefined to explicitly request the default value.
+          if (theme && !themedValue && console && !(themeSlot in theme)) {
+            /* tslint:disable: max-line-length */
+            console.warn(`Theming value not provided for "${themeSlot}". Falling back to "${defaultValue || 'inherit'}".`);
+            /* tslint:enable: max-line-length */
+          }
+
+          return themedValue || defaultValue || 'inherit';
+        } else {
+          // A non-themable string. Preserve it.
+          return currentValue.rawString;
+        }
       }
     });
 
@@ -214,10 +220,10 @@ export function splitStyles(styles: string): ThemableArray {
 /**
  * Registers a set of style text. If it is registered too early, we will register it when the
  * window.load event is fired.
- * @param {ThemableArray} styleArray Array of IThemingInstruction objects to register.
+ * @param {ThemableInput} styleArray Array of IThemingInstruction objects to register.
  * @param {IStyleRecord} styleRecord May specify a style Element to update.
  */
-function registerStyles(styleArray: ThemableArray, styleRecord?: IStyleRecord): void {
+function registerStyles(styleArray: ThemableInput, styleRecord?: IStyleRecord): void {
   const head: HTMLHeadElement = document.getElementsByTagName('head')[0];
   const styleElement: HTMLStyleElement = document.createElement('style');
 
@@ -242,10 +248,10 @@ function registerStyles(styleArray: ThemableArray, styleRecord?: IStyleRecord): 
 /**
  * Registers a set of style text, for IE 9 and below, which has a ~30 style element limit so we need
  * to register slightly differently.
- * @param {ThemableArray} styleArray Array of IThemingInstruction objects to register.
+ * @param {ThemableInput} styleArray Array of IThemingInstruction objects to register.
  * @param {IStyleRecord} styleRecord May specify a style Element to update.
  */
-function registerStylesIE(styleArray: ThemableArray, styleRecord?: IStyleRecord): void {
+function registerStylesIE(styleArray: ThemableInput, styleRecord?: IStyleRecord): void {
   const head: HTMLHeadElement = document.getElementsByTagName('head')[0];
   let { lastStyleElement, registeredStyles }: IThemeState = _themeState;
 
