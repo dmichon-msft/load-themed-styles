@@ -5,6 +5,7 @@ import {
   splitStyles,
   loadStyles,
   configureLoadStyles,
+  IThemedValue,
   IThemingInstruction
 } from './index';
 
@@ -49,7 +50,7 @@ describe('detokenize', () => {
     const cssString: string = '.sampleClass\n{\n color: #FF0000;\n}\n';
     const arr: IThemingInstruction[] = splitStyles(cssString);
     expect(arr.length).to.equal(1);
-    expect(arr[0].rawString).to.equal(cssString);
+    expect(arr[0]).to.equal(cssString);
   });
 
   it('splits themable CSS', () => {
@@ -58,9 +59,9 @@ describe('detokenize', () => {
     expect(arr.length).to.equal(5);
     for (let i: number = 0; i < arr.length; i++) {
       if (i % 2 === 0) { // even index should be a string component
-        expect(typeof arr[i].rawString).to.equal('string');
+        expect(typeof arr[i]).to.equal('string');
       } else { // odd index should be a theme instruction object
-        expect(typeof arr[i].theme).to.equal('string');
+        expect(typeof (arr[i] as IThemedValue).theme).to.equal('string');
       }
     }
   });

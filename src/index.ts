@@ -1,21 +1,22 @@
 /**
  * An IThemingInstruction can specify a rawString to be preserved or a theme slot and a default value
- * to use if that slot is not specified by the theme.
+ * to use if that slot is not specified by the theme. The raw string case may simply be a string.
  */
 
 // Declaring a global here in case that the execution environment is Node.js (without importing the
 // entire node.js d.ts for now)
 declare var global: any; // tslint:disable-line:no-any
 
-export interface IThemingInstruction {
-  theme?: string;
+export interface IThemedValue {
+  theme: string;
   defaultValue?: string;
-  rawString?: string;
+}
+
+export type IThemingInstruction = IThemedValue | string | {
+  rawString: string;
 }
 
 export type ThemableArray = Array<IThemingInstruction>;
-
-export type ThemableInput = Array<IThemingInstruction | string>;
 
 export interface ITheme {
   [key: string]: string;
@@ -68,9 +69,9 @@ const MAX_STYLE_CONTENT_SIZE: number = 10000;
 /**
  * Loads a set of style text. If it is registered too early, we will register it when the window.load
  * event is fired.
- * @param {ThemableInput} styles Themable style text to register.
+ * @param {string | ThemableArray} styles Themable style text to register.
  */
-export function loadStyles(styles: string | ThemableInput): void {
+export function loadStyles(styles: string | ThemableArray): void {
   const styleParts: ThemableArray = Array.isArray(styles) ? styles : splitStyles(styles);
 
   if (_injectStylesWithCssText === undefined) {
@@ -91,10 +92,10 @@ export function configureLoadStyles(callback: (styles: string) => void): void {
 /**
  * Loads a set of style text. If it is registered too early, we will register it when the window.load event
  * is fired.
- * @param {ThemableInput} stylesArray Style to register.
+ * @param {ThemableArray} stylesArray Style to register.
  * @param {IStyleRecord} styleRecord Existing style record to re-apply.
  */
-function applyThemableStyles(stylesArray: ThemableInput, styleRecord?: IStyleRecord): void {
+function applyThemableStyles(stylesArray: ThemableArray, styleRecord?: IStyleRecord): void {
   if (_themeState.loadStyles) {
     const styles: string = resolveThemableArray(stylesArray);
     _themeState.loadStyles(styles);
@@ -140,39 +141,41 @@ export function detokenize(styles: string): string {
   return styles;
 }
 
+function isThemedValue(instruction: IThemingInstruction): instruction is IThemedValue {
+  return !!(instruction as IThemedValue).theme;
+}
+
 /**
  * Resolves ThemingInstruction objects in an array and joins the result into a string.
- * @param {ThemableInput} splitStyleArray ThemableInput to resolve and join.
+ * @param {ThemableArray} splitStyleArray ThemableArray to resolve and join.
  */
-function resolveThemableArray(splitStyleArray: ThemableInput): string {
+function resolveThemableArray(splitStyleArray: ThemableArray): string {
   const { theme }: IThemeState = _themeState;
   let resolvedCss: string;
   if (splitStyleArray) {
     // Resolve the array of theming instructions to an array of strings.
     // Then join the array to produce the final CSS string.
-    const resolvedArray: string[] = splitStyleArray.map((currentValue: string | IThemingInstruction) => {
+    const resolvedArray: string[] = splitStyleArray.map((currentValue: IThemingInstruction) => {
       if (typeof currentValue === 'string') {
         return currentValue;
-      } else {
+      } else if (isThemedValue(currentValue)) {
         const themeSlot: string = currentValue.theme;
-        if (themeSlot) {
-          // A theming annotation. Resolve it.
-          const themedValue: string = theme ? theme[themeSlot] : undefined;
-          const defaultValue: string = currentValue.defaultValue;
+        // A theming annotation. Resolve it.
+        const themedValue: string = theme && theme[themeSlot];
+        const defaultValue: string = currentValue.defaultValue;
 
-          // Warn to console if we hit an unthemed value even when themes are provided.
-          // Allow the themedValue to be undefined to explicitly request the default value.
-          if (theme && !themedValue && console && !(themeSlot in theme)) {
-            /* tslint:disable: max-line-length */
-            console.warn(`Theming value not provided for "${themeSlot}". Falling back to "${defaultValue || 'inherit'}".`);
-            /* tslint:enable: max-line-length */
-          }
-
-          return themedValue || defaultValue || 'inherit';
-        } else {
-          // A non-themable string. Preserve it.
-          return currentValue.rawString;
+        // Warn to console if we hit an unthemed value even when themes are provided.
+        // Allow the themedValue to be undefined to explicitly request the default value.
+        if (theme && !themedValue && console && !(themeSlot in theme)) {
+          /* tslint:disable: max-line-length */
+          console.warn(`Theming value not provided for "${themeSlot}". Falling back to "${defaultValue || 'inherit'}".`);
+          /* tslint:enable: max-line-length */
         }
+
+        return themedValue || defaultValue || 'inherit';
+      } else {
+        // A non-themable string. Preserve it.
+        return currentValue.rawString;
       }
     });
 
@@ -194,9 +197,7 @@ export function splitStyles(styles: string): ThemableArray {
     while (tokenMatch = _themeTokenRegex.exec(styles)) {
       const matchIndex: number = tokenMatch.index;
       if (matchIndex > pos) {
-        result.push({
-          rawString: styles.substring(pos, matchIndex)
-        });
+        result.push(styles.substring(pos, matchIndex));
       }
 
       result.push({
@@ -209,9 +210,7 @@ export function splitStyles(styles: string): ThemableArray {
     }
 
     // Push the rest of the string after the last match.
-    result.push({
-      rawString: styles.substring(pos)
-    });
+    result.push(styles.substring(pos));
   }
 
   return result;
@@ -220,10 +219,10 @@ export function splitStyles(styles: string): ThemableArray {
 /**
  * Registers a set of style text. If it is registered too early, we will register it when the
  * window.load event is fired.
- * @param {ThemableInput} styleArray Array of IThemingInstruction objects to register.
+ * @param {ThemableArray} styleArray Array of IThemingInstruction objects to register.
  * @param {IStyleRecord} styleRecord May specify a style Element to update.
  */
-function registerStyles(styleArray: ThemableInput, styleRecord?: IStyleRecord): void {
+function registerStyles(styleArray: ThemableArray, styleRecord?: IStyleRecord): void {
   const head: HTMLHeadElement = document.getElementsByTagName('head')[0];
   const styleElement: HTMLStyleElement = document.createElement('style');
 
@@ -248,10 +247,10 @@ function registerStyles(styleArray: ThemableInput, styleRecord?: IStyleRecord): 
 /**
  * Registers a set of style text, for IE 9 and below, which has a ~30 style element limit so we need
  * to register slightly differently.
- * @param {ThemableInput} styleArray Array of IThemingInstruction objects to register.
+ * @param {ThemableArray} styleArray Array of IThemingInstruction objects to register.
  * @param {IStyleRecord} styleRecord May specify a style Element to update.
  */
-function registerStylesIE(styleArray: ThemableInput, styleRecord?: IStyleRecord): void {
+function registerStylesIE(styleArray: ThemableArray, styleRecord?: IStyleRecord): void {
   const head: HTMLHeadElement = document.getElementsByTagName('head')[0];
   let { lastStyleElement, registeredStyles }: IThemeState = _themeState;
 
